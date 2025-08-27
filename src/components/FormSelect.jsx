@@ -1,21 +1,22 @@
-const FormSelect = ({ label, id, name, value, options, onChange, required = true }) => (
-  <div>
-    <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-2">
-      {label}
-    </label>
+const FormSelect = ({ label, id, name, value, onChange, options, disabled, placeholder }) => (
+  <div className="flex flex-col">
+    <label htmlFor={id} className="text-sm font-medium text-gray-300 mb-1">{label}</label>
     <select
       id={id}
       name={name}
       value={value}
       onChange={onChange}
-      required={required}
-      className="w-full px-4 py-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 transition-all"
+      disabled={disabled}
+      className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      <option value="" disabled>Select {label.toLowerCase()}</option>
-      {options.map(option => (
-        <option key={option} value={option}>{option}</option>
+      <option value="" disabled>{placeholder || `Select ${label.toLowerCase()}`}</option>
+      {options.map((option, index) => (
+        <option key={index} value={option.value}>
+          {option.label}
+        </option>
       ))}
     </select>
   </div>
 );
+
 export default FormSelect;

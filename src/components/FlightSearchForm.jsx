@@ -1,11 +1,16 @@
-import { useState } from 'react';
+// src/components/FlightSearchForm.jsx
+import { useState, useCallback } from 'react';
 import axios from 'axios';
 import FormInput from './FormInput';
 import FormSelect from './FormSelect';
 import SubmitButton from './SubmitButton';
+import LocationSelects from './LocationSelects';
 
-const AIRPORTS = ['JFK', 'LAX', 'SFO', 'ORD', 'LHR', 'CDG'];
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD'];
+const CURRENCY_OPTIONS = CURRENCIES.map(currency => ({
+  value: currency,
+  label: currency,
+}));
 
 const FlightSearchForm = ({ onSearchStart }) => {
   const [formData, setFormData] = useState({
@@ -19,10 +24,11 @@ const FlightSearchForm = ({ onSearchStart }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleChange = (e) => {
+  // Use useCallback to memoize the handleChange function
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,25 +72,8 @@ const FlightSearchForm = ({ onSearchStart }) => {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormSelect
-              label="Origin Airport"
-              id="origin"
-              name="origin"
-              value={formData.origin}
-              onChange={handleChange}
-              options={AIRPORTS}
-            />
-
-            <FormSelect
-              label="Destination Airport"
-              id="destination"
-              name="destination"
-              value={formData.destination}
-              onChange={handleChange}
-              options={AIRPORTS}
-            />
-          </div>
+          {/* Delegate location selection to a child component */}
+          <LocationSelects formData={formData} handleChange={handleChange} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormInput
@@ -95,7 +84,6 @@ const FlightSearchForm = ({ onSearchStart }) => {
               value={formData.departure_date}
               onChange={handleChange}
             />
-
             <FormInput
               label="Return Date"
               id="return_date"
@@ -124,7 +112,7 @@ const FlightSearchForm = ({ onSearchStart }) => {
               name="currency"
               value={formData.currency}
               onChange={handleChange}
-              options={CURRENCIES}
+              options={CURRENCY_OPTIONS}
             />
           </div>
 
