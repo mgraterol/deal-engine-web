@@ -1,12 +1,38 @@
-# React + Vite
+# README
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This repository contains the frontend application for the Invo system, built with React and Vite. It provides the user interface and interacts with the backend API to manage business logic and data.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### **Setup the Application**
 
-## Expanding the ESLint configuration
+To install and get the project running, follow these steps:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+* **Install Node.js**: Ensure you have Node.js (and npm or Yarn) installed on your system. We recommend using `nvm` or `asdf` to manage Node.js versions.
+    * If using `asdf`, you can add the Node.js plugin: `asdf plugin add nodejs`
+    * Then install the project's specified Node.js version: `asdf install`
+* **Install Dependencies**: Install all project dependencies using your preferred package manager:
+    `npm install`
+    _or_
+    `yarn install`
+* **Environment Variables**: This project uses environment variables (e.g., for API endpoints). Create a `.env` file in the root of the project (e.g., `.env.local` for local development) and add necessary variables.
+    * Example: `VITE_API_BASE_URL=http://localhost:3000/api/v1`
+
+---
+
+### **Run the Application**
+
+To run the application, you can start a development server or build it for production.
+
+* **Start Development Server**: This will launch the application in development mode with hot-module reloading:
+    `npm run dev`
+    _or_
+    `yarn dev`
+* **Build for Production**: This compiles and bundles the application for deployment:
+    `npm run build`
+    _or_
+    `yarn build`
+* **Preview Production Build**: After building, you can preview the production build locally:
+    `npm run preview`
+    _or_
+    `yarn preview`
