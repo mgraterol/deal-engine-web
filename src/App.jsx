@@ -6,6 +6,7 @@ export default function FlightBooking() {
   const [currentView, setCurrentView] = useState('form'); // 'form', 'loading', 'results'
   const [jobId, setJobId] = useState(null);
   const [flightSearchData, setFlightSearchData] = useState(null);
+  const [searchResults, setSearchResults] = useState(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 text-white">
@@ -25,7 +26,10 @@ export default function FlightBooking() {
         <FlightLoadingScreen 
           jobId={jobId}
           searchData={flightSearchData}
-          onResultsReady={() => setCurrentView('results')}
+          onResultsReady={(results) => {
+            setSearchResults(results);
+            setCurrentView('results');
+          }}
           onBackToForm={() => setCurrentView('form')}
         />
       )}
@@ -33,7 +37,12 @@ export default function FlightBooking() {
       {currentView === 'results' && (
         <FlightResults 
           searchData={flightSearchData}
-          onNewSearch={() => setCurrentView('form')}
+          results={searchResults}
+          onNewSearch={() => {
+            setCurrentView('form');
+            setJobId(null);
+            setSearchResults(null);
+          }}
         />
       )}
     </div>
@@ -185,58 +194,94 @@ const FlightSearchForm = ({ onSearchStart, onJobIdReceived }) => {
   );
 };
 
-// Flight Loading Screen Component with WebSocket Connection
+// Flight Loading Screen Component with Correct WebSocket Connection
 const FlightLoadingScreen = ({ jobId, searchData, onResultsReady, onBackToForm }) => {
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Initializing flight search...');
   const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const [searchResults, setSearchResults] = useState(null);
 
   useEffect(() => {
-    if (!jobId) return;
+    let ws;
+    let reconnectTimeout;
+    let progressInterval;
 
-    // Connect to WebSocket
     const connectWebSocket = () => {
+      // Clear any existing reconnect timeout
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+
       try {
-        // Replace with your actual WebSocket URL
-        const ws = new WebSocket(`ws://localhost:3000/cable?job_id=${jobId}`);
-        
+        ws = new WebSocket(`ws://localhost:3000/cable`);
+        setConnectionStatus('connecting');
+
         ws.onopen = () => {
           setConnectionStatus('connected');
-          setStatusMessage('Connected to flight search service...');
+          setStatusMessage('Connected to search service. Subscribing...');
           
-          // Subscribe to the channel
-          const msg = {
+          const subscribeMsg = {
             command: "subscribe",
             identifier: JSON.stringify({
-              channel: "FlightSearchChannel",
+              channel: "FlightsChannel",
               job_id: jobId
             })
           };
-          ws.send(JSON.stringify(msg));
+          ws.send(JSON.stringify(subscribeMsg));
         };
 
         ws.onmessage = (event) => {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === "ping") return;
-          
-          if (data.message) {
-            // Handle progress updates
-            if (data.message.progress) {
-              setProgress(data.message.progress);
+          try {
+            const data = JSON.parse(event.data);
+            console.log('WebSocket message received:', data);
+            
+            // Handle different message types
+            if (data.type === "ping" || data.type === "welcome") {
+              return; // Ignore ping and welcome messages
             }
             
-            // Handle status messages
-            if (data.message.status) {
-              setStatusMessage(data.message.status);
+            if (data.type === "confirm_subscription") {
+              setStatusMessage('Search in progress...');
+              
+              // Start progress simulation (remove this when your backend sends real progress)
+              progressInterval = setInterval(() => {
+                setProgress(prev => {
+                  if (prev >= 90) {
+                    clearInterval(progressInterval);
+                    return 90;
+                  }
+                  return prev + 10;
+                });
+              }, 2000);
+              
+              return;
             }
-            
-            // Handle completion
-            if (data.message.complete) {
+
+            // *** THE FIX IS HERE: Check for `data.message` and use it if it exists ***
+            // Otherwise, assume the entire `data` object is the payload.
+            const messagePayload = data.message || data;
+
+            // Handle search results or progress updates
+            if (messagePayload.data || messagePayload.flights || messagePayload.offers) {
+              clearInterval(progressInterval);
+              setSearchResults(messagePayload);
               setProgress(100);
-              setStatusMessage('Flight search complete!');
-              setTimeout(() => onResultsReady(), 1500);
+              setStatusMessage('Search complete!');
+              setTimeout(() => onResultsReady(messagePayload), 1000);
             }
+            
+            // Handle errors
+            else if (messagePayload.errors) {
+              clearInterval(progressInterval);
+              setStatusMessage(`Error: ${messagePayload.errors}`);
+              setConnectionStatus('error');
+            }
+            
+            // Handle progress updates (if your backend sends them)
+            else if (messagePayload.progress) {
+              setProgress(messagePayload.progress);
+              setStatusMessage(`Searching... ${messagePayload.progress}% complete`);
+            }
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
           }
         };
 
@@ -244,21 +289,17 @@ const FlightLoadingScreen = ({ jobId, searchData, onResultsReady, onBackToForm }
           console.error('WebSocket error:', error);
           setConnectionStatus('error');
           setStatusMessage('Connection error. Retrying...');
+          reconnectTimeout = setTimeout(connectWebSocket, 3000);
         };
 
-        ws.onclose = () => {
-          setConnectionStatus('disconnected');
-          if (progress < 100) {
+        ws.onclose = (event) => {
+          if (!event.wasClean) {
+            console.log('Connection lost unexpectedly. Retrying...');
             setStatusMessage('Connection lost. Trying to reconnect...');
-            setTimeout(connectWebSocket, 3000);
+            reconnectTimeout = setTimeout(connectWebSocket, 3000);
           }
         };
 
-        return () => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.close();
-          }
-        };
       } catch (error) {
         console.error('WebSocket connection failed:', error);
         setConnectionStatus('error');
@@ -266,20 +307,22 @@ const FlightLoadingScreen = ({ jobId, searchData, onResultsReady, onBackToForm }
       }
     };
 
-    connectWebSocket();
-
-    // Simulate progress if WebSocket isn't available (for demo purposes)
-    const simulateProgress = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(simulateProgress);
-          return 100;
-        }
-        return prev + Math.random() * 10;
-      });
-    }, 2000);
-
-    return () => clearInterval(simulateProgress);
+    if (jobId) {
+      connectWebSocket();
+    }
+    
+    // Cleanup function to close the WebSocket connection when the component unmounts
+    return () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+    };
   }, [jobId, onResultsReady]);
 
   return (
@@ -324,6 +367,7 @@ const FlightLoadingScreen = ({ jobId, searchData, onResultsReady, onBackToForm }
               <p><span className="font-medium">To:</span> {searchData.destination}</p>
               <p><span className="font-medium">Dates:</span> {searchData.departure_date} to {searchData.return_date}</p>
               <p><span className="font-medium">Travelers:</span> {searchData.adults}</p>
+              <p><span className="font-medium">Job ID:</span> {jobId}</p>
             </div>
           </div>
           
@@ -340,8 +384,77 @@ const FlightLoadingScreen = ({ jobId, searchData, onResultsReady, onBackToForm }
 };
 
 // Flight Results Component
-const FlightResults = ({ searchData, onNewSearch }) => {
-  // This would display the actual flight results from the WebSocket
+// Enhanced Flight Results Component
+const FlightResults = ({ searchData, results, onNewSearch }) => {
+  const renderFlightResults = () => {
+    if (!results) return <p className="text-gray-300">No results available</p>;
+    
+    if (results.errors) {
+      return (
+        <div className="bg-red-900 bg-opacity-50 p-4 rounded-lg">
+          <p className="text-red-200">Error: {results.errors}</p>
+        </div>
+      );
+    }
+    
+    // Handle different response formats
+    const flights = results.flights || results.data?.flights || results.data || [];
+    
+    if (flights.length > 0) {
+      return (
+        <div className="space-y-4">
+          {flights.map((flight, index) => (
+            <div key={index} className="bg-gray-700 p-4 rounded-lg border border-gray-600">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex-1">
+                  <h4 className="font-semibold text-white text-lg">
+                    {flight.airline || 'Flight'} {flight.flight_number || ''}
+                  </h4>
+                  <div className="flex items-center mt-2">
+                    <div className="text-center">
+                      <p className="text-xl font-bold">{flight.departure?.time?.split('T')[1]?.substring(0, 5) || '--:--'}</p>
+                      <p className="text-sm text-gray-400">{flight.departure?.airport || 'N/A'}</p>
+                    </div>
+                    <div className="mx-4 flex flex-col items-center">
+                      <div className="w-16 h-1 bg-gray-500"></div>
+                      <p className="text-xs text-gray-400 mt-1">{flight.duration || 'N/A'}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold">{flight.arrival?.time?.split('T')[1]?.substring(0, 5) || '--:--'}</p>
+                      <p className="text-sm text-gray-400">{flight.arrival?.airport || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right ml-4">
+                  <p className="text-2xl font-bold text-green-400">
+                    ${flight.price || 'N/A'}
+                  </p>
+                  <p className="text-sm text-gray-400">{flight.currency || searchData.currency}</p>
+                  <button className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
+                    Select
+                  </button>
+                </div>
+              </div>
+              {flight.departure?.terminal && (
+                <p className="text-sm text-gray-400">Terminal: {flight.departure.terminal}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    // Fallback: show raw JSON data for debugging
+    return (
+      <div className="bg-gray-700 p-6 rounded-lg">
+        <h4 className="font-semibold text-white mb-2">Raw Response Data:</h4>
+        <pre className="text-gray-200 text-sm overflow-auto">
+          {JSON.stringify(results, null, 2)}
+        </pre>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="bg-gray-800 bg-opacity-70 backdrop-blur-lg p-8 rounded-xl shadow-2xl w-full max-w-4xl border border-gray-700">
@@ -371,13 +484,8 @@ const FlightResults = ({ searchData, onNewSearch }) => {
         </div>
         
         <div className="mb-8">
-          <h3 className="text-lg font-semibold text-white mb-4">Available Flights</h3>
-          <div className="space-y-4">
-            <div className="bg-gray-700 p-4 rounded-lg">
-              <p className="text-gray-300 text-center">Flight results would be displayed here</p>
-              <p className="text-gray-400 text-center text-sm mt-2">Connected to WebSocket channel with real-time updates</p>
-            </div>
-          </div>
+          <h3 className="text-lg font-semibold text-white mb-4">Search Results</h3>
+          {renderFlightResults()}
         </div>
         
         <div className="text-center">
