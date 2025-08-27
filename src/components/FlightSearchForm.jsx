@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+// src/components/FlightSearchForm.jsx
+import { useState, useCallback } from 'react';
 import axios from 'axios';
 import FormInput from './FormInput';
 import FormSelect from './FormSelect';
 import SubmitButton from './SubmitButton';
+import LocationSelects from './LocationSelects';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD'];
 const CURRENCY_OPTIONS = CURRENCIES.map(currency => ({
@@ -11,13 +13,6 @@ const CURRENCY_OPTIONS = CURRENCIES.map(currency => ({
 }));
 
 const FlightSearchForm = ({ onSearchStart }) => {
-  const [countries, setCountries] = useState([]);
-  const [originAirports, setOriginAirports] = useState([]);
-  const [destinationAirports, setDestinationAirports] = useState([]);
-
-  const [originCountry, setOriginCountry] = useState('');
-  const [destinationCountry, setDestinationCountry] = useState('');
-
   const [formData, setFormData] = useState({
     origin: '',
     destination: '',
@@ -26,73 +21,14 @@ const FlightSearchForm = ({ onSearchStart }) => {
     adults: '1',
     currency: 'USD',
   });
-
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const res = await axios.get('http://localhost:3000/api/v1/countries');
-        setCountries(res.data);
-      } catch (err) {
-        console.error('Error fetching countries:', err);
-        setError('Could not load country data.');
-      }
-    };
-    fetchCountries();
-  }, []);
-
-  useEffect(() => {
-    const fetchOriginAirports = async () => {
-      if (!originCountry) {
-        setOriginAirports([]);
-        setFormData(prev => ({ ...prev, origin: '' }));
-        return;
-      }
-      try {
-        const res = await axios.get(`http://localhost:3000/api/v1/airports?country=${originCountry}`);
-        setOriginAirports(res.data);
-      } catch (err) {
-        console.error('Error fetching origin airports:', err);
-        setError('Could not load origin airport data.');
-        setOriginAirports([]);
-      }
-    };
-    fetchOriginAirports();
-  }, [originCountry]);
-
-  useEffect(() => {
-    const fetchDestinationAirports = async () => {
-      if (!destinationCountry) {
-        setDestinationAirports([]);
-        setFormData(prev => ({ ...prev, destination: '' }));
-        return;
-      }
-      try {
-        const res = await axios.get(`http://localhost:3000/api/v1/airports?country=${destinationCountry}`);
-        setDestinationAirports(res.data);
-      } catch (err) {
-        console.error('Error fetching destination airports:', err);
-        setError('Could not load destination airport data.');
-        setDestinationAirports([]);
-      }
-    };
-    fetchDestinationAirports();
-  }, [destinationCountry]);
-
-  const handleOriginCountryChange = (e) => {
-    setOriginCountry(e.target.value);
-  };
-
-  const handleDestinationCountryChange = (e) => {
-    setDestinationCountry(e.target.value);
-  };
-
-  const handleChange = (e) => {
+  // Use useCallback to memoize the handleChange function
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -136,49 +72,8 @@ const FlightSearchForm = ({ onSearchStart }) => {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormSelect
-              label="Origin Country"
-              id="origin-country"
-              name="origin-country"
-              value={originCountry}
-              onChange={handleOriginCountryChange}
-              options={countries.map(c => ({ value: c.code, label: c.name }))}
-              placeholder="Select origin country"
-            />
-            <FormSelect
-              label="Destination Country"
-              id="destination-country"
-              name="destination-country"
-              value={destinationCountry}
-              onChange={handleDestinationCountryChange}
-              options={countries.map(c => ({ value: c.code, label: c.name }))}
-              placeholder="Select destination country"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormSelect
-              label="Origin Airport"
-              id="origin"
-              name="origin"
-              value={formData.origin}
-              onChange={handleChange}
-              options={originAirports.map(a => ({ value: a.code, label: `${a.code} - ${a.city}` }))}
-              disabled={!originCountry}
-              placeholder="Select origin airport"
-            />
-            <FormSelect
-              label="Destination Airport"
-              id="destination"
-              name="destination"
-              value={formData.destination}
-              onChange={handleChange}
-              options={destinationAirports.map(a => ({ value: a.code, label: `${a.code} - ${a.city}` }))}
-              disabled={!destinationCountry}
-              placeholder="Select destination airport"
-            />
-          </div>
+          {/* Delegate location selection to a child component */}
+          <LocationSelects formData={formData} handleChange={handleChange} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormInput
