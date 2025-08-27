@@ -1,6 +1,11 @@
-import CheckIcon from './icons/CheckIcon';
+import React, { useState, useEffect } from 'react';
 
-// Helper function to format ISO 8601 duration
+const CheckIcon = () => (
+  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  </svg>
+);
+
 const formatDuration = (isoDuration) => {
   if (!isoDuration) return 'N/A';
   const matches = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
@@ -13,7 +18,6 @@ const formatDuration = (isoDuration) => {
   return formatted.trim();
 };
 
-// Helper function to get city and airport names from IATA codes
 const getAirportInfo = (iataCode, locations) => {
   const location = locations[iataCode];
   if (location) {
@@ -22,7 +26,6 @@ const getAirportInfo = (iataCode, locations) => {
   return iataCode;
 };
 
-// Helper function to parse and format a timestamp
 const formatTime = (isoDateTime) => {
   if (!isoDateTime) return 'N/A';
   const date = new Date(isoDateTime);
@@ -30,6 +33,44 @@ const formatTime = (isoDateTime) => {
 };
 
 const FlightResults = ({ searchData, results, onNewSearch }) => {
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [selectedAirlines, setSelectedAirlines] = useState([]);
+  const [availableAirlines, setAvailableAirlines] = useState([]);
+
+  useEffect(() => {
+    if (results && results.data && results.dictionaries) {
+      const uniqueAirlines = new Set();
+      results.data.forEach(offer => {
+        offer.itineraries.forEach(itinerary => {
+          itinerary.segments.forEach(segment => {
+            if (segment.carrierCode && results.dictionaries.carriers?.[segment.carrierCode]) {
+              uniqueAirlines.add(results.dictionaries.carriers[segment.carrierCode]);
+            } else if (segment.carrierCode) {
+                uniqueAirlines.add(segment.carrierCode);
+            }
+          });
+        });
+      });
+      setAvailableAirlines(Array.from(uniqueAirlines).sort());
+    }
+  }, [results]);
+
+  const handleMinPriceChange = (e) => {
+    setMinPrice(e.target.value);
+  };
+
+  const handleMaxPriceChange = (e) => {
+    setMaxPrice(e.target.value);
+  };
+
+  const handleAirlineChange = (airlineName) => {
+    setSelectedAirlines(prev =>
+      prev.includes(airlineName)
+        ? prev.filter(a => a !== airlineName)
+        : [...prev, airlineName]
+    );
+  };
 
   const renderFlightResults = () => {
     if (!results) {
@@ -47,13 +88,38 @@ const FlightResults = ({ searchData, results, onNewSearch }) => {
     const flightOffers = results.data || [];
     const dictionaries = results.dictionaries || {};
 
-    if (flightOffers.length === 0) {
-      return <p className="text-gray-300">No flights found for your search criteria. Please try a different search.</p>;
+    let filteredOffers = flightOffers.filter(offer => {
+      const price = parseFloat(offer.price?.grandTotal || 0);
+      const min = parseFloat(minPrice);
+      const max = parseFloat(maxPrice);
+
+      if ((minPrice !== '' && price < min) || (maxPrice !== '' && price > max)) {
+        return false;
+      }
+
+      if (selectedAirlines.length > 0) {
+        const offerAirlines = new Set();
+        offer.itineraries.forEach(itinerary => {
+          itinerary.segments.forEach(segment => {
+            const airlineName = dictionaries.carriers?.[segment.carrierCode] || segment.carrierCode;
+            offerAirlines.add(airlineName);
+          });
+        });
+        const hasSelectedAirline = selectedAirlines.some(selected => offerAirlines.has(selected));
+        if (!hasSelectedAirline) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (filteredOffers.length === 0) {
+      return <p className="text-gray-300">No flights found for your criteria. Please adjust your filters.</p>;
     }
 
     return (
       <div className="space-y-6">
-        {flightOffers.map((offer, offerIndex) => (
+        {filteredOffers.map((offer, offerIndex) => (
           <div key={offer.id} className="bg-gray-700 p-4 rounded-lg border border-gray-600 shadow-md">
             <div className="flex justify-between items-center mb-4">
               <h4 className="font-semibold text-white text-lg">
@@ -161,6 +227,84 @@ const FlightResults = ({ searchData, results, onNewSearch }) => {
             <div>
               <p><span className="font-medium">Dates:</span> {searchData.departure_date} to {searchData.return_date}</p>
               <p><span className="font-medium">Travelers:</span> {searchData.adults}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters Section */}
+        <div className="bg-gray-900 bg-opacity-50 p-6 rounded-lg mb-8">
+          <h3 className="text-lg font-semibold text-white mb-4">Filter Results</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Price Filter */}
+            <div>
+              <label className="block text-gray-400 text-sm font-medium mb-2">Price Range</label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={minPrice}
+                  onChange={handleMinPriceChange}
+                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-400">-</span>
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={maxPrice}
+                  onChange={handleMaxPriceChange}
+                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Airline Filter */}
+            <div>
+              <label className="block text-gray-400 text-sm font-medium mb-2">Airlines</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto" style={{
+                WebkitBoxShadow: "inset 0 0 6px rgba(0,0,0,0.3)",
+                WebkitBorderRadius: "10px",
+                "&::-webkit-scrollbar": {
+                  width: "8px",
+                  backgroundColor: "#555"
+                },
+                "&::-webkit-scrollbar-thumb": {
+                  WebkitBorderRadius: "10px",
+                  backgroundColor: "#888"
+                },
+                scrollbarWidth: "thin",
+                scrollbarColor: "#888 #555"
+              }}>
+                {availableAirlines.length > 0 ? (
+                  availableAirlines.map(airline => (
+                    <div key={airline} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`airline-${airline}`}
+                        checked={selectedAirlines.includes(airline)}
+                        onChange={() => handleAirlineChange(airline)}
+                        className="peer hidden"
+                      />
+                      <label
+                        htmlFor={`airline-${airline}`}
+                        className="flex items-center cursor-pointer text-gray-300 text-sm"
+                      >
+                        <div className="w-4 h-4 mr-2 border border-gray-500 rounded flex items-center justify-center
+                                       peer-checked:bg-blue-600 peer-checked:border-blue-600 transition-colors duration-200">
+                          {/* Checkmark SVG for checked state */}
+                          {selectedAirlines.includes(airline) && (
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        {airline}
+                      </label>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500 text-sm">No airlines available.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

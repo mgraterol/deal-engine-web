@@ -38,7 +38,7 @@ const FlightLoadingScreen = ({ jobId, searchData, onResultsReady, onBackToForm }
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log('WebSocket message received:', data);
+            // console.log('WebSocket message received:', data);
 
             if (data.type === "ping" || data.type === "welcome" || data.type === "confirm_subscription") {
               if (data.type === "confirm_subscription") {
